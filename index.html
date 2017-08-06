@@ -2,7 +2,7 @@
 <html>
 	<!--
 Radial Family Trees on HTML5 Canvas
-Copyright (C) 2013 tobyp
+Copyright (C) 2013, 2017 tobyp
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -20,94 +20,106 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 	<head>
 		<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
 		<title>Family Tree</title>
-		<script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js"></script>
+		<script src="jquery.mousewheel.min.js"></script>
+		<script src="jquery.min.js"></script>
 		<style type="text/css">
-			#ft_lines,#ft_tags,#ft_text
-			{
+			* {
+				border: 0;
+				padding: 0;
+				margin: 0;
+			}
+			#family_tree {
 				position: absolute;
-				top: 2em;
+				left: 0;
+				top: 0;
+				right: 0;
+				bottom: 0;
+			}
+			span#copy {
+				display: block;
+				background: white;
+				position: absolute;
+				padding: 0.2em;
+				bottom: 0.2em;
+				right: 0.2em;
 			}
 		</style>
 		<script type="text/javascript" src="family_tree.js"></script>
 		<script type="text/javascript">
-			var ctx_text, ctx_tags, ctx_lines;
-			var size = [1200, 1200];
-			var max_radial_distance = 150;
-
+			var ctx;
+			var SIZE = [1200, 1200];
+			var MIN_RADIAL_DISTANCE = 150;
+			var FONT = '12px monospace';
+			var CIRCLE_STYLE = "#bbb";
+			var LINE_STYLE = "#999";
+			var TEXT_STYLE = "#000";
+			var TAG_STYLE = "#fff";
 			var ANGLE = 0;
 			var DISTANCE = 1;
 			var X = 0;
 			var Y = 1;
 
-			var ft = family_tree;
-			function max(list) //used for depth
-			{
+			function max(list) { //used for depth
 				var m = list[0];
-				for (var i in list)
-				{
+				for (var i in list) {
 					if (list[i] > m) m = list[i];
 				}
 				return m;
 			}
 
-			function translate(reference, location) //translate relative polar coords to absolute x/y
-			{
+			function translate(reference, location) { //translate relative polar coords to absolute x/y
 				var rad = (location[ANGLE] * 2 * Math.PI) / 360.0;
 				return [reference[X] + location[DISTANCE] * Math.sin(rad), reference[Y] + location[DISTANCE] * Math.cos(rad)];
 			}
 
-			function line(reference, location0, location1) //draw a line using rel. polar coords
-			{
-				ctx_lines.strokeStyle = "#999";
+			function line(reference, location0, location1) { //draw a line using rel. polar coords
+				ctx.strokeStyle = LINE_STYLE;
 				location0 = translate(reference, location0);
 				location1 = translate(reference, location1);
-				ctx_lines.beginPath()
-				ctx_lines.moveTo(location0[X], location0[Y]);
-				ctx_lines.lineTo(location1[X], location1[Y]);
-				ctx_lines.closePath()
-				ctx_lines.stroke();
+				ctx.beginPath()
+				ctx.moveTo(location0[X], location0[Y]);
+				ctx.lineTo(location1[X], location1[Y]);
+				ctx.closePath()
+				ctx.stroke();
 			}
 
-			function text(reference, location, string) //draw centered text using rel. polar coords
-			{
-				var l = ctx_text.measureText(string).width / 2;
+			function text(reference, location, string) { //draw centered text using rel. polar coords
+				var l = ctx.measureText(string).width / 2;
 				location = translate(reference, location)
-				ctx_tags.fillRect(location[X] - l - 2, location[Y] - 13, 2 * l + 4, 24);
-				ctx_text.fillStyle = "#000";
-				ctx_text.fillText(string, location[X] - l, location[Y]);
+				ctx.fillStyle = TAG_STYLE;
+				ctx.fillRect(location[X] - l - 2, location[Y] - 13, 2 * l + 4, 24);
+				ctx.fillStyle = TEXT_STYLE;
+				ctx.textBaseline = 'middle';
+				ctx.font = FONT;
+				ctx.fillText(string, location[X] - l, location[Y]);
 			}
 
-			function circle(reference, center, radius) //draw a circle using rel. polar coords
-			{
+			function circle(reference, center, radius) { //draw a circle using rel. polar coords
 				center = translate(reference, center);
-				ctx_lines.beginPath();
-				ctx_lines.arc(center[X], center[Y], radius, 0, Math.PI*2, true); 
-				ctx_lines.closePath();
-				ctx_lines.stroke();
+				ctx.strokeStyle = CIRCLE_STYLE;
+				ctx.beginPath();
+				ctx.arc(center[X], center[Y], radius, 0, Math.PI*2, true); 
+				ctx.closePath();
+				ctx.stroke();
 			}
 
-			function display_line(reference, location, parent_location) //draw line from child to parent
-			{
+			function display_line(reference, location, parent_location) { //draw line from child to parent
 				if (parent_location != null)
 					line(reference, location, parent_location);
 			}
 
-			function display_text(reference, location, node) //draw text of a person - name and (optinally) spouse
-			{
+			function display_text(reference, location, node) { //draw text of a person - name and (optinally) spouse
 				var str = node['name']
-				if (typeof(node['spouse']) !== "undefined")
-				{
+				if (typeof(node['spouse']) !== "undefined") {
 					str += " ∞ " + node['spouse'];
 				}
 				text(reference, location, str);
 			}
 
-			function count_segments(branch, depth) //count how wide and deep the tree will be. width is max(1, sum of childrens' width), depth is max(1, max(all of childrens' depth))
-			{
+			function count_segments(branch, depth) { //count how wide and deep the tree will be. width is max(1, sum of childrens' width), depth is max(1, max(all of childrens' depth))
 				branch['width'] = 0;
 				branch['depth'] = depth;
-				for (var c in branch['children'])
-				{
+				for (var c in branch['children']) {
 					count_segments(branch['children'][c], depth+1);
 					branch['width'] += branch['children'][c]['width'];
 					branch['depth'] = max([branch['depth'], branch['children'][c]['depth']])
@@ -115,84 +127,98 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 				branch['width'] = Math.max(1, branch['width']);
 			}
 
-			function draw_segment(reference, data, angle, distance, parent_loc, delta) //draw a node and its children recursively
-			{
+			function draw_segment(reference, data, angle, distance, parent_loc, delta) { //draw a node and its children recursively
 				var display_loc = [angle + (delta[ANGLE] * data['width']) / 2.5, distance]; //my display: in the angle-middle of all my children.
 
 				display_line(reference, display_loc, parent_loc);
-				for (var c_ in data['children'])
-				{
+				for (var c_ in data['children']) {
 					var c = data['children'][c_];
 					draw_segment(reference, c, angle, distance+delta[DISTANCE], display_loc, delta)
 					angle += c['width']*delta[ANGLE];
 				}
 				
 				display_text(reference, display_loc, data);
-				console.log(data["name"], data["spouse"], display_loc[0]-180.0, display_loc[1]);
 			}
 
-			function draw(origin, ft) //draw a family tree relative to origin
-			{
-				var delta = [360.0 / ft['width'], max([max_radial_distance, ft['width'] * 2.0])];
+			function draw(origin, family_tree) { //draw a family tree relative to origin
+				var delta = [360.0 / family_tree['width'], max([MIN_RADIAL_DISTANCE, family_tree['width'] * 2.0])];
 
-				ctx_lines.strokeStyle = "#bbb";
 				var i;
-				for (i=1; i<=ft['depth']; i++)
-				{
+				for (i=1; i<=family_tree['depth']; i++) {
 					circle(origin, [0.0, 0.0], i*delta[DISTANCE]);
 				}
-				draw_segment(origin, ft, 0.0, 0.0, null, delta);
+				draw_segment(origin, family_tree, 0.0, 0.0, null, delta);
 			}
 
-			function refresh()
-			{
-				canv = $("#ft_lines")[0];
-				ctx_lines = canv.getContext('2d');
+			var dx = 0, dy = 0, scale = 1;
+			var vx = 0, vy = 0;
+			var last_frame = null;
 
-				canv.width = size[0];
-				canv.height = size[1];
-				ctx_lines.width = size[0];
-				ctx_lines.height = size[1];
-				ctx_lines.strokeStyle = "#aaa";
+			var cnv, cnv, cnv;
 
-				canv = $("#ft_tags")[0];
-				ctx_tags = canv.getContext('2d');
+			function render(timestamp) {
+				var delta = 0;
+				if (last_frame != null) { delta = timestamp - last_frame; }
+				last_frame = timestamp;
 
-				canv.width = size[0];
-				canv.height = size[1];
-				ctx_tags.width = size[0];
-				ctx_tags.height = size[1];
-				ctx_tags.fillStyle = "#fff";
+				ctx.clearRect(0, 0, ctx.width, ctx.height);
+				ctx.save();
+				ctx.scale(scale, scale);
+				ctx.translate(dx, dy);
+				draw([SIZE[0] / 2, SIZE[1] / 2], family_tree);
+				ctx.restore();
 
-				canv = $("#ft_text")[0];
-				ctx_text = canv.getContext('2d');
-
-				canv.width = size[0];
-				canv.height = size[1];
-				ctx_text.width = size[0];
-				ctx_text.height = size[1];
-				ctx_text.textBaseline = 'middle';
-				ctx_text.font = '15px monospace';
-
-				count_segments(ft, 0);
-				draw([size[0] / 2, size[1] / 2], ft);
+				dx += vx * delta;
+				dy += vy * delta;
+				window.requestAnimationFrame(render);
 			}
 
-			$(document).ready(function()
-			{
-				refresh();
+			$(document).ready(function() {
+				var cnv = $("#family_tree")[0];
+				ctx = cnv.getContext('2d');
+
+				$(window).resize(function() {
+					cnv.width = window.innerWidth;
+					cnv.height = window.innerHeight;
+					ctx.width = window.innerWidth;
+					ctx.height = window.innerHeight;
+				}).resize();
+
+				count_segments(family_tree, 0);
+
+				var downs = {};
+				$(window).mousewheel(function(e){
+					scale *= Math.pow(1.1, e.deltaY);
+					console.log("scale ", scale);
+				}).keydown(function(e) {
+					//"LEFT": 37, "UP": 38, "RIGHT": 39, "DOWN": 40
+					if (downs[e.which]) return;
+					if (e.which == 37) vx += 1;
+					else if (e.which == 38) vy += 1;
+					else if (e.which == 39) vx -= 1;
+					else if (e.which == 40) vy -= 1;
+					downs[e.which] = true;
+					console.log({'vx':vx, 'vy':vy, 'dx':dx, 'dy':dy});
+				}).keyup(function(e) {
+					if (e.which == 37) vx -= 1;
+					else if (e.which == 38) vy -= 1;
+					else if (e.which == 39) vx += 1;
+					else if (e.which == 40) vy += 1;
+					downs[e.which] = false;
+					console.log({'vx':vx, 'vy':vy, 'dx':dx, 'dy':dy});
+				});
+
+				window.requestAnimationFrame(render);
 			});
 		</script>
 	</head>
 	<body>
-		<canvas id="ft_lines">
+		<canvas id="family_tree">
 			Your web-browser doesn't support HTML5 Canvas drawing. You should get a recent web browser, like Google Chrome or Firefox.
 		</canvas>
-		<canvas id="ft_tags"></canvas>
-		<canvas id="ft_text"></canvas>
 		<noscript>
 			Additionally, your browser doesn't support JavaScript. You should turn it on in the settings, or get a browser like Google Chrome or Firefox that support it.
 		</noscript>
-		<span>&copy; 2013 tobyp | <a href="https://github.com/tobyp/family-tree">github</a></span>
+		<span id="copy">&copy; 2013 tobyp | <a href="https://github.com/tobyp/family-tree">github</a></span>
 	</body>
 </html>
